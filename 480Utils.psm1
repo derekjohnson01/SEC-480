@@ -28,25 +28,50 @@ function New-VMFromSnapshot {
         # Select source VM
         Write-Host "`nAvailable VMs:" 
         Get-VM | Format-Table -AutoSize
-        $srcVM = Read-Host -Prompt "Select your source VM"
+        do {
+            $srcVM = Read-Host -Prompt "Select your source VM"
+            if ([string]::IsNullOrWhiteSpace($srcVM)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($srcVM))
         
         # Select snapshot
         Write-Host "`nAvailable Snapshots:" 
         Get-Snapshot -VM $srcVM | Format-Table -AutoSize
-        $snapshot = Read-Host -Prompt "Select your snapshot"
+        do {
+            $snapshot = Read-Host -Prompt "Select your snapshot"
+            if ([string]::IsNullOrWhiteSpace($snapshot)) {
+                Write-Host "Snapshot name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($snapshot))
         
         # Select datacenter
         Write-Host "`nAvailable Datacenters:"
         Get-Datacenter | Format-Table -AutoSize
-        $dc = Read-Host -Prompt "Select your datacenter"
+        do {
+            $dc = Read-Host -Prompt "Select your datacenter"
+            if ([string]::IsNullOrWhiteSpace($dc)) {
+                Write-Host "Datacenter name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($dc))
         
         # Select VM Host
         Write-Host "`nAvailable VM Hosts:"
         Get-VMHost | Format-Table -AutoSize
-        $VMHost = Read-Host -Prompt "Select your VM Host"
+        do {
+            $VMHost = Read-Host -Prompt "Select your VM Host"
+            if ([string]::IsNullOrWhiteSpace($VMHost)) {
+                Write-Host "VM Host cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($VMHost))
         
         # Set new VM name
-        $newName = Read-Host -Prompt "Set the new VM name"
+        do {
+            $newName = Read-Host -Prompt "Set the new VM name"
+            if ([string]::IsNullOrWhiteSpace($newName)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($newName))
 
         # build json
         $configJson = @"
@@ -68,13 +93,10 @@ function New-VMFromSnapshot {
         $configJson | Out-File -FilePath $configPath -Encoding UTF8
 
         # output 
-        Write-Host "Successfully updated config.json at: $configPath"
+        Write-Host "Successfully updated config.json at: $configPath" -ForegroundColor Green
     }
     catch {
         Write-Error "Failed to update config.json: $_"
         throw
     }
 }
-
-# Export the function
-Export-ModuleMember -Function New-VMFromSnapshot
