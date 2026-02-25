@@ -65,6 +65,16 @@ function New-VMFromSnapshot {
             }
         } while ([string]::IsNullOrWhiteSpace($VMHost))
         
+        # Select Datastore
+        Write-Host "`nAvailable Datastores:"
+        Get-Datastore | Format-Table -AutoSize
+        do {
+            $datastore = Read-Host -Prompt "Select your datastore"
+            if ([string]::IsNullOrWhiteSpace($datastore)) {
+                Write-Host "Datastore cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($datastore))
+        
         # Set new VM name
         do {
             $newName = Read-Host -Prompt "Set the new VM name"
@@ -82,6 +92,7 @@ function New-VMFromSnapshot {
         "snapshot": "$snapshot",
         "dc": "$dc",
         "VMHost": "$VMHost",
+        "datastore": "$datastore",
         "newVMName": "$newName"
     }
 }
@@ -100,3 +111,82 @@ function New-VMFromSnapshot {
         throw
     }
 }
+
+function Invoke-VMClone {
+    <#
+    .SYNOPSIS
+        Clones a VM from a snapshot using linked clone method
+    
+    .DESCRIPTION
+        Creates a linked clone from a snapshot, then creates a full clone, 
+        takes a new base snapshot, and removes the linked clone
+    
+    .PARAMETER ConfigPath
+        Path to config.json file (default: Desktop\config.json)
+    
+    .EXAMPLE
+        Invoke-VMClone
+        Invoke-VMClone -ConfigPath "C:\path\to\config.json"
+    #>
+    
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [string]$ConfigPath = (Join-Path ([Environment]::GetFolderPath("Desktop")) "config.json")
+    )
+    
+    try {
+        # Check if config exists
+        if (-not (Test-Path $ConfigPath)) {
+            throw "Config file not found at: $ConfigPath. Please run New-VMFromSnapshot first."
+        }
+        
+        # Read config
+        Write-Host "Reading config from: $ConfigPath"
+        $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        
+        # Validate config has required fields
+        if ([string]::IsNullOrWhiteSpace($config.current.srcVM)) {
+            throw "Source VM not found in config. Please run New-VMFromSnapshot first."
+        }
+        
+        # Get VM objects
+        Write-Host "Getting VM: $($config.current.srcVM)"
+        $vm = Get-VM -Name $config.current.srcVM -ErrorAction Stop
+        
+        Write-Host "Getting snapshot: $($config.current.snapshot)"
+        $snapshot = Get-Snapshot -VM $vm -Name $config.current.snapshot -ErrorAction Stop
+        
+        Write-Host "Getting VM Host: $($config.current.VMHost)"
+        $vmhost = Get-VMHost -Name $config.current.VMHost -ErrorAction Stop
+        
+        Write-Host "Getting Datastore: $($config.current.datastore)"
+        $ds = Get-Datastore -Name $config.current.datastore -ErrorAction Stop
+        
+        # Create linked clone
+        $linkedClone = "{0}.linked" -f $vm.name
+        Write-Host "Creating linked clone: $linkedClone"
+        $linkedvm = New-VM -LinkedClone -Name $linkedClone -VM $vm -ReferenceSnapshot $snapshot -VMHost $vmhost -Datastore $ds
+        
+        # Create full clone
+        Write-Host "Creating full clone: $($config.current.newVMName)"
+        $newvm = New-VM -Name $config.current.newVMName -VM $linkedvm -VMHost $vmhost -Datastore $ds
+        
+        # Create base snapshot
+        Write-Host "Creating base snapshot"
+        $newvm | New-Snapshot -Name "Base"
+        
+        # Remove linked clone
+        Write-Host "Removing linked clone"
+        $linkedvm | Remove-VM -Confirm:$false
+        
+        Write-Host "Successfully cloned VM: $($config.current.newVMName)" -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed to clone VM: $_"
+        throw
+    }
+}
+
+# Export the functions
+Export-ModuleMember -Function New-VMFromSnapshot, Invoke-VMClone
