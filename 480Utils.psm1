@@ -27,7 +27,7 @@ function New-VMFromSnapshot {
         
         # Select source VM
         Write-Host "`nAvailable VMs:" 
-        Get-VM | Format-Table -AutoSize
+        Get-VM -ErrorAction Stop | Format-Table -AutoSize
         do {
             $srcVM = Read-Host -Prompt "Select your source VM"
             if ([string]::IsNullOrWhiteSpace($srcVM)) {
@@ -37,7 +37,7 @@ function New-VMFromSnapshot {
         
         # Select snapshot
         Write-Host "`nAvailable Snapshots:" 
-        Get-Snapshot -VM $srcVM | Format-Table -AutoSize
+        Get-Snapshot -VM $srcVM -ErrorAction Stop | Format-Table -AutoSize
         do {
             $snapshot = Read-Host -Prompt "Select your snapshot"
             if ([string]::IsNullOrWhiteSpace($snapshot)) {
@@ -47,7 +47,7 @@ function New-VMFromSnapshot {
         
         # Select datacenter
         Write-Host "`nAvailable Datacenters:"
-        Get-Datacenter | Format-Table -AutoSize
+        Get-Datacenter -ErrorAction Stop | Format-Table -AutoSize
         do {
             $dc = Read-Host -Prompt "Select your datacenter"
             if ([string]::IsNullOrWhiteSpace($dc)) {
@@ -57,7 +57,7 @@ function New-VMFromSnapshot {
         
         # Select VM Host
         Write-Host "`nAvailable VM Hosts:"
-        Get-VMHost | Format-Table -AutoSize
+        Get-VMHost -ErrorAction Stop | Format-Table -AutoSize
         do {
             $VMHost = Read-Host -Prompt "Select your VM Host"
             if ([string]::IsNullOrWhiteSpace($VMHost)) {
@@ -67,7 +67,7 @@ function New-VMFromSnapshot {
         
         # Select Datastore
         Write-Host "`nAvailable Datastores:"
-        Get-Datastore | Format-Table -AutoSize
+        Get-Datastore -ErrorAction Stop | Format-Table -AutoSize
         do {
             $datastore = Read-Host -Prompt "Select your datastore"
             if ([string]::IsNullOrWhiteSpace($datastore)) {
@@ -83,7 +83,7 @@ function New-VMFromSnapshot {
             }
         } while ([string]::IsNullOrWhiteSpace($newName))
 
-        # build json
+        # Build json
         $configJson = @"
 {
     "current": {
@@ -103,11 +103,10 @@ function New-VMFromSnapshot {
         $configPath = Join-Path $desktopPath "config.json"
         $configJson | Out-File -FilePath $configPath -Encoding UTF8
 
-        # output 
         Write-Host "Successfully updated config.json at: $configPath" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to update config.json: $_"
+        Write-Error "Failed in New-VMFromSnapshot: $_"
         throw
     }
 }
@@ -183,10 +182,200 @@ function Invoke-VMClone {
         Write-Host "Successfully cloned VM: $($config.current.newVMName)" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to clone VM: $_"
+        Write-Error "Failed in Invoke-VMClone: $_"
+        throw
+    }
+}
+
+function New-Network {
+    try {
+        # Show available VMHosts and select one
+        Write-Host "`nAvailable VMHosts:" -ForegroundColor Cyan
+        Get-VMHost -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $vmHostName = Read-Host -Prompt "Enter the VMHost name to create the virtual switch on"
+            if ([string]::IsNullOrWhiteSpace($vmHostName)) {
+                Write-Host "VMHost name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($vmHostName))
+
+        # Required: Virtual Switch Name
+        do {
+            $vSwitchName = Read-Host -Prompt "Enter a name for the new virtual switch"
+            if ([string]::IsNullOrWhiteSpace($vSwitchName)) {
+                Write-Host "Virtual switch name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($vSwitchName))
+
+        # Create the virtual switch
+        New-VirtualSwitch -VMHost $vmHostName -Name $vSwitchName -ErrorAction Stop
+        Write-Host "`nVirtual switch '$vSwitchName' created successfully." -ForegroundColor Green
+
+        # Show available virtual switches on the host
+        Write-Host "`nAvailable Virtual Switches on host '$vmHostName':" -ForegroundColor Cyan
+        Get-VirtualSwitch -VMHost $vmHostName -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $selectedSwitch = Read-Host -Prompt "Enter the virtual switch name to create a port group on"
+            if ([string]::IsNullOrWhiteSpace($selectedSwitch)) {
+                Write-Host "Virtual switch name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($selectedSwitch))
+
+        # Required: Port Group Name
+        do {
+            $pgName = Read-Host -Prompt "Enter a name for the new port group"
+            if ([string]::IsNullOrWhiteSpace($pgName)) {
+                Write-Host "Port group name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($pgName))
+
+        # Create the port group — VirtualSwitch requires an object
+        $virtualSwitch = Get-VirtualSwitch -VMHost $vmHostName -Name $selectedSwitch -ErrorAction Stop
+        New-VirtualPortGroup -Name $pgName -VirtualSwitch $virtualSwitch -ErrorAction Stop
+        Write-Host "`nPort group '$pgName' created successfully on switch '$selectedSwitch'." -ForegroundColor Green
+
+    }
+    catch {
+        Write-Error "Failed in New-Network: $_"
+        throw
+    }
+}
+
+function Get-Network {
+    try {
+        # Show available VMs
+        Write-Host "`nAvailable VMs:" -ForegroundColor Cyan
+        Get-VM -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $vmName = Read-Host -Prompt "Enter the VM name to get network info on"
+            if ([string]::IsNullOrWhiteSpace($vmName)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($vmName))
+
+        # Get network adapters — accepts string
+        Write-Host "`nNetwork Adapters for '$vmName':" -ForegroundColor Cyan
+        Get-NetworkAdapter -VM $vmName -ErrorAction Stop | Format-Table -AutoSize
+
+        # Get IP — requires VM object for .Guest.IPAddress
+        $vm = Get-VM -Name $vmName -ErrorAction Stop
+        $ipAddress = $vm.Guest.IPAddress[0]
+        Write-Host "`nPrimary IP Address: $ipAddress" -ForegroundColor Green
+
+    }
+    catch {
+        Write-Error "Failed in Get-Network: $_"
+        throw
+    }
+}
+
+function Start-VMInteractive {
+    try {
+        # Get all powered off VMs
+        $poweredOffVMs = Get-VM -ErrorAction Stop | Where-Object { $_.PowerState -eq "PoweredOff" }
+
+        if ($poweredOffVMs.Count -eq 0) {
+            Write-Host "No powered off VMs found." -ForegroundColor Yellow
+            return
+        }
+
+        Write-Host "`nPowered Off VMs:" -ForegroundColor Cyan
+        $poweredOffVMs | Format-Table -Property Name, PowerState -AutoSize
+
+        do {
+            $selection = Read-Host "Enter the name of the VM you want to start"
+            if ([string]::IsNullOrWhiteSpace($selection)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($selection))
+
+        Start-VM -VM $selection -Confirm:$false -ErrorAction Stop
+        Write-Host "$selection started successfully." -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed in Start-VMInteractive: $_"
+        throw
+    }
+}
+
+function Stop-VMInteractive {
+    try {
+        # Get all powered on VMs
+        $poweredOnVMs = Get-VM -ErrorAction Stop | Where-Object { $_.PowerState -eq "PoweredOn" }
+
+        if ($poweredOnVMs.Count -eq 0) {
+            Write-Host "No powered on VMs found." -ForegroundColor Yellow
+            return
+        }
+
+        Write-Host "`nPowered On VMs:" -ForegroundColor Cyan
+        $poweredOnVMs | Format-Table -Property Name, PowerState -AutoSize
+
+        do {
+            $selection = Read-Host "Enter the name of the VM you want to stop"
+            if ([string]::IsNullOrWhiteSpace($selection)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($selection))
+
+        Stop-VM -VM $selection -Confirm:$false -ErrorAction Stop
+        Write-Host "$selection stopped successfully." -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed in Stop-VMInteractive: $_"
+        throw
+    }
+}
+
+function Set-Network {
+    try {
+        # Show available VMs
+        Write-Host "`nAvailable VMs:" -ForegroundColor Cyan
+        Get-VM -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $vmName = Read-Host -Prompt "Enter the VM name to configure the network adapter on"
+            if ([string]::IsNullOrWhiteSpace($vmName)) {
+                Write-Host "VM name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($vmName))
+
+        # Show available network adapters — accepts string
+        Write-Host "`nAvailable Network Adapters for '$vmName':" -ForegroundColor Cyan
+        Get-NetworkAdapter -VM $vmName -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $adapterName = Read-Host -Prompt "Enter the network adapter name to configure"
+            if ([string]::IsNullOrWhiteSpace($adapterName)) {
+                Write-Host "Adapter name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($adapterName))
+
+        # Show available virtual networks
+        Write-Host "`nAvailable Virtual Networks:" -ForegroundColor Cyan
+        Get-VirtualNetwork -ErrorAction Stop | Format-Table -AutoSize
+
+        do {
+            $networkName = Read-Host -Prompt "Enter the virtual network name to assign to the adapter"
+            if ([string]::IsNullOrWhiteSpace($networkName)) {
+                Write-Host "Network name cannot be empty. Please try again." -ForegroundColor Red
+            }
+        } while ([string]::IsNullOrWhiteSpace($networkName))
+
+        # Set-NetworkAdapter requires adapter object, NetworkName accepts string
+        $adapter = Get-NetworkAdapter -VM $vmName -Name $adapterName -ErrorAction Stop
+        Set-NetworkAdapter -NetworkAdapter $adapter -NetworkName $networkName -Confirm:$false -ErrorAction Stop
+        Write-Host "`nNetwork adapter '$adapterName' successfully assigned to '$networkName'." -ForegroundColor Green
+
+    }
+    catch {
+        Write-Error "Failed in Set-Network: $_"
         throw
     }
 }
 
 # Export the functions
-Export-ModuleMember -Function New-VMFromSnapshot, Invoke-VMClone
+Export-ModuleMember -Function New-VMFromSnapshot, Invoke-VMClone, New-Network, Get-Network, Set-Network, Start-VMInteractive, Stop-VMInteractive
