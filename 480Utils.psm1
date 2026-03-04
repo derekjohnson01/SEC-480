@@ -21,13 +21,9 @@ function New-VMFromSnapshot {
     )
     
     try {
-        # Connect to vCenter
-        Write-Host "Connecting to vCenter: $vserver" 
-        Connect-VIServer $vserver -ErrorAction Stop
-        
         # Select source VM
         Write-Host "`nAvailable VMs:" 
-        Get-VM -ErrorAction Stop | Format-Table -AutoSize
+        Get-VM | Format-Table -AutoSize
         do {
             $srcVM = Read-Host -Prompt "Select your source VM"
             if ([string]::IsNullOrWhiteSpace($srcVM)) {
@@ -37,7 +33,7 @@ function New-VMFromSnapshot {
         
         # Select snapshot
         Write-Host "`nAvailable Snapshots:" 
-        Get-Snapshot -VM $srcVM -ErrorAction Stop | Format-Table -AutoSize
+        Get-Snapshot -VM $srcVM | Format-Table -AutoSize
         do {
             $snapshot = Read-Host -Prompt "Select your snapshot"
             if ([string]::IsNullOrWhiteSpace($snapshot)) {
@@ -47,7 +43,7 @@ function New-VMFromSnapshot {
         
         # Select datacenter
         Write-Host "`nAvailable Datacenters:"
-        Get-Datacenter -ErrorAction Stop | Format-Table -AutoSize
+        Get-Datacenter | Format-Table -AutoSize
         do {
             $dc = Read-Host -Prompt "Select your datacenter"
             if ([string]::IsNullOrWhiteSpace($dc)) {
@@ -57,7 +53,7 @@ function New-VMFromSnapshot {
         
         # Select VM Host
         Write-Host "`nAvailable VM Hosts:"
-        Get-VMHost -ErrorAction Stop | Format-Table -AutoSize
+        Get-VMHost | Format-Table -AutoSize
         do {
             $VMHost = Read-Host -Prompt "Select your VM Host"
             if ([string]::IsNullOrWhiteSpace($VMHost)) {
@@ -67,7 +63,7 @@ function New-VMFromSnapshot {
         
         # Select Datastore
         Write-Host "`nAvailable Datastores:"
-        Get-Datastore -ErrorAction Stop | Format-Table -AutoSize
+        Get-Datastore | Format-Table -AutoSize
         do {
             $datastore = Read-Host -Prompt "Select your datastore"
             if ([string]::IsNullOrWhiteSpace($datastore)) {
@@ -83,7 +79,7 @@ function New-VMFromSnapshot {
             }
         } while ([string]::IsNullOrWhiteSpace($newName))
 
-        # Build json
+        # build json
         $configJson = @"
 {
     "current": {
@@ -103,10 +99,11 @@ function New-VMFromSnapshot {
         $configPath = Join-Path $desktopPath "config.json"
         $configJson | Out-File -FilePath $configPath -Encoding UTF8
 
+        # output 
         Write-Host "Successfully updated config.json at: $configPath" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed in New-VMFromSnapshot: $_"
+        Write-Error "Failed to update config.json: $_"
         throw
     }
 }
@@ -166,6 +163,7 @@ function Invoke-VMClone {
         $linkedClone = "{0}.linked" -f $vm.name
         Write-Host "Creating linked clone: $linkedClone"
         $linkedvm = New-VM -LinkedClone -Name $linkedClone -VM $vm -ReferenceSnapshot $snapshot -VMHost $vmhost -Datastore $ds
+        Start-Sleep -Seconds 5
         
         # Create full clone
         Write-Host "Creating full clone: $($config.current.newVMName)"
@@ -182,7 +180,7 @@ function Invoke-VMClone {
         Write-Host "Successfully cloned VM: $($config.current.newVMName)" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed in Invoke-VMClone: $_"
+        Write-Error "Failed to clone VM: $_"
         throw
     }
 }
