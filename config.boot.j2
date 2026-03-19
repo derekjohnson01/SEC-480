@@ -1,0 +1,99 @@
+interfaces {
+    ethernet eth0 {
+        address {{ wan_ip }}/24
+        hw-id 00:50:56:87:92:0b
+    }
+    ethernet eth1 {
+        address {{ lan_ip }}/24
+        hw-id 00:50:56:87:9d:f3
+    }
+    loopback lo {
+    }
+}
+nat {
+    source {
+        rule 10 {
+            outbound-interface eth0
+            source {
+                address 10.0.5.0/24
+            }
+            translation {
+                address masquerade
+            }
+        }
+    }
+}
+protocols {
+    static {
+        route 0.0.0.0/0 {
+            next-hop 192.168.3.250 {
+            }
+        }
+    }
+}
+service {
+    dns {
+        forwarding {
+            allow-from 10.0.5.0/24
+            listen-address 10.0.5.2
+            system
+        }
+    }
+    ssh {
+        listen-address 0.0.0.0
+    }
+}
+system {
+    config-management {
+        commit-revisions 100
+    }
+    conntrack {
+        modules {
+            ftp
+            h323
+            nfs
+            pptp
+            sip
+            sqlnet
+            tftp
+        }
+    }
+    console {
+        device ttyS0 {
+            speed 115200
+        }
+    }
+    host-name vyos-derek
+    login {
+        user vyos {
+            authentication {
+                encrypted-password {{ password_hash }}
+                plaintext-password ""
+                public-keys ansible {
+                    key AAAAC3NzaC1lZDI1NTE5AAAAIBBWMNfWJtm7Ji7o5R8KRH4dvLprMpIKzwjBrHFeZCW8
+                    type ssh-ed25519
+                }
+            }
+        }
+    }
+    name-server 192.168.4.4
+    name-server 192.168.4.5
+    ntp {
+        server time1.vyos.net {
+        }
+        server time2.vyos.net {
+        }
+        server time3.vyos.net {
+        }
+    }
+    syslog {
+        global {
+            facility all {
+                level info
+            }
+            facility protocols {
+                level debug
+            }
+        }
+    }
+}

@@ -1,0 +1,38 @@
+---
+- name: Configure VyOS FW-Blue1
+  hosts: fw-blue1
+  gather_facts: false
+  vars_prompt:
+    - name: vyos_password
+      prompt: "Enter the new VyOS password"
+      private: true
+      confirm: true
+
+  vars:
+    wan_ip: "10.0.17.200"
+    lan_ip: "10.0.5.2"
+
+  tasks:
+    - name: Generate SHA-512 password hash
+      delegate_to: localhost
+      ansible.builtin.set_fact:
+        password_hash: "{{ vyos_password | password_hash('sha512') }}"
+
+    - name: Deploy config.boot from Jinja2 template
+      ansible.builtin.template:
+        src: config.boot.j2
+        dest: /config/config.boot
+
+    - name: Reboot VyOS to apply configuration
+      ansible.builtin.shell: nohup bash -c "sleep 2 && reboot" &
+      async: 0
+      poll: 0
+
+    - name: Wait for VyOS to come back online
+      delegate_to: localhost
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        delay: 10
+        timeout: 300
+        state: started

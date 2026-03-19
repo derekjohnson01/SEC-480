@@ -333,7 +333,6 @@ function Set-Network {
         # Show available VMs
         Write-Host "`nAvailable VMs:" -ForegroundColor Cyan
         Get-VM -ErrorAction Stop | Format-Table -AutoSize
-
         do {
             $vmName = Read-Host -Prompt "Enter the VM name to configure the network adapter on"
             if ([string]::IsNullOrWhiteSpace($vmName)) {
@@ -341,33 +340,46 @@ function Set-Network {
             }
         } while ([string]::IsNullOrWhiteSpace($vmName))
 
-        # Show available network adapters — accepts string
-        Write-Host "`nAvailable Network Adapters for '$vmName':" -ForegroundColor Cyan
-        Get-NetworkAdapter -VM $vmName -ErrorAction Stop | Format-Table -AutoSize
+        # Get all adapters and display them numbered
+        $adapters = Get-NetworkAdapter -VM $vmName -ErrorAction Stop
+        Write-Host "`nNetwork Adapters for '$vmName':" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $adapters.Count; $i++) {
+            Write-Host "  [$i] $($adapters[$i].Name) - $($adapters[$i].NetworkName)" -ForegroundColor White
+        }
 
+        # Let user pick which adapters to configure
         do {
-            $adapterName = Read-Host -Prompt "Enter the network adapter name to configure"
-            if ([string]::IsNullOrWhiteSpace($adapterName)) {
-                Write-Host "Adapter name cannot be empty. Please try again." -ForegroundColor Red
+            $selection = Read-Host -Prompt "`nEnter adapter numbers to configure (comma-separated, e.g. 0,1,2)"
+            if ([string]::IsNullOrWhiteSpace($selection)) {
+                Write-Host "Selection cannot be empty. Please try again." -ForegroundColor Red
             }
-        } while ([string]::IsNullOrWhiteSpace($adapterName))
+        } while ([string]::IsNullOrWhiteSpace($selection))
+
+        $indices = $selection -split ',' | ForEach-Object { [int]$_.Trim() }
 
         # Show available virtual networks
         Write-Host "`nAvailable Virtual Networks:" -ForegroundColor Cyan
         Get-VirtualNetwork -ErrorAction Stop | Format-Table -AutoSize
-
         do {
-            $networkName = Read-Host -Prompt "Enter the virtual network name to assign to the adapter"
+            $networkName = Read-Host -Prompt "Enter the virtual network name to assign"
             if ([string]::IsNullOrWhiteSpace($networkName)) {
                 Write-Host "Network name cannot be empty. Please try again." -ForegroundColor Red
             }
         } while ([string]::IsNullOrWhiteSpace($networkName))
 
-        # Set-NetworkAdapter requires adapter object, NetworkName accepts string
-        $adapter = Get-NetworkAdapter -VM $vmName -Name $adapterName -ErrorAction Stop
-        Set-NetworkAdapter -NetworkAdapter $adapter -NetworkName $networkName -Confirm:$false -ErrorAction Stop
-        Write-Host "`nNetwork adapter '$adapterName' successfully assigned to '$networkName'." -ForegroundColor Green
+        # Loop through selected adapters and assign the network
+        foreach ($i in $indices) {
+            if ($i -lt 0 -or $i -ge $adapters.Count) {
+                Write-Host "Skipping invalid index: $i" -ForegroundColor Yellow
+                continue
+            }
+            $adapter = $adapters[$i]
+            Write-Host "Setting $($adapter.Name) -> $networkName"
+            Set-NetworkAdapter -NetworkAdapter $adapter -NetworkName $networkName -Confirm:$false -ErrorAction Stop
+            Write-Host "  Done." -ForegroundColor Green
+        }
 
+        Write-Host "`nAll selected adapters assigned to '$networkName'." -ForegroundColor Green
     }
     catch {
         Write-Error "Failed in Set-Network: $_"
