@@ -1,0 +1,19 @@
+all:
+  vars:
+    ansible_user: derek
+    ansible_ssh_private_key_file: ~/.ssh/ansible_key
+    ansible_become: true
+    ansible_become_method: sudo
+  hosts:
+    rocky1:
+      ansible_host: 10.0.5.75
+      target_hostname: rocky1-derek
+      target_ip: 10.0.5.10
+    rocky2:
+      ansible_host: 10.0.5.76
+      target_hostname: rocky2-derek
+      target_ip: 10.0.5.11
+    rocky3:
+      ansible_host: 10.0.5.77
+      target_hostname: rocky3-derek
+      target_ip: 10.0.5.12

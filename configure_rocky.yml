@@ -1,0 +1,47 @@
+- name: Post-provision Rocky VMs
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Add derek public key
+      authorized_key:
+        user: derek
+        state: present
+        key: "{{ lookup('file', '~/.ssh/ansible_key.pub') }}"
+
+    - name: Create sudoers drop-in for derek
+      copy:
+        dest: /etc/sudoers.d/derek
+        content: "derek ALL=(ALL) NOPASSWD: ALL\n"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    - name: Set hostname
+      hostname:
+        name: "{{ target_hostname }}"
+
+    - name: Update /etc/hosts with new hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ target_hostname }}"
+        state: present
+
+    - name: Get network interface name
+      shell: nmcli -t -f NAME con show --active | head -1
+      register: active_connection
+      changed_when: false
+
+    - name: Switch from DHCP to static IP
+      shell: |
+        nmcli con mod "{{ active_connection.stdout }}" ipv4.method manual \
+          ipv4.addresses {{ target_ip }}/24 \
+          ipv4.gateway 10.0.5.2 \
+          ipv4.dns 10.0.5.5
+        nmcli con up "{{ active_connection.stdout }}"
+      register: network_change
+
+    - name: Verify new IP
+      debug:
+        msg: "{{ target_hostname }} should now be at {{ target_ip }}"
