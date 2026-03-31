@@ -1,0 +1,20 @@
+- name: Revert Rocky VMs to DHCP
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Get network interface name
+      shell: nmcli -t -f NAME con show --active | head -1
+      register: active_connection
+      changed_when: false
+
+    - name: Switch from static IP back to DHCP
+      shell: |
+        nmcli con mod "{{ active_connection.stdout }}" ipv4.method auto \
+          ipv4.addresses "" \
+          ipv4.gateway "" \
+          ipv4.dns ""
+        nmcli con up "{{ active_connection.stdout }}"
+      async: 10
+      poll: 0

@@ -24,16 +24,16 @@ New-Network
 #>
 
 # Step 4: Get network info on a VM
-Write-Host "`n--- Test: Get-Network ---" -ForegroundColor Yellow
-Get-Network
+# Write-Host "`n--- Test: Get-Network ---" -ForegroundColor Yellow
+# Get-Network
 
 # Step 5: Assign a network adapter to a network
-Write-Host "`n--- Test: Set-Network ---" -ForegroundColor Yellow
-Set-Network
+# Write-Host "`n--- Test: Set-Network ---" -ForegroundColor Yellow
+# Set-Network
 
 # Step 6: Start a powered off VM
-Write-Host "`n--- Test: Start-VMInteractive ---" -ForegroundColor Yellow
-Start-VMInteractive
+# Write-Host "`n--- Test: Start-VMInteractive ---" -ForegroundColor Yellow
+# Start-VMInteractive
 
 <# 
 # Step 7: Stop a powered on VM

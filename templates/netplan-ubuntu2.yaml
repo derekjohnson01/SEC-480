@@ -1,0 +1,12 @@
+network:
+  version: 2
+  ethernets:
+    ens34:
+      addresses:
+        - 10.0.5.31/24
+      routes:
+        - to: default
+          via: 10.0.5.2
+      nameservers:
+        addresses:
+          - 10.0.5.2

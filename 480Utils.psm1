@@ -260,7 +260,7 @@ function Get-Network {
 
         # Get IP — requires VM object for .Guest.IPAddress
         $vm = Get-VM -Name $vmName -ErrorAction Stop
-        $ipAddress = $vm.Guest.IPAddress[0]
+        $ipAddress = $vm.Guest.IPAddress
         Write-Host "`nPrimary IP Address: $ipAddress" -ForegroundColor Green
 
     }

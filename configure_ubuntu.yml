@@ -1,0 +1,48 @@
+- name: Post-provision Ubuntu VMs
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Add derek public key
+      authorized_key:
+        user: derek
+        state: present
+        key: "{{ lookup('file', '~/.ssh/ansible_key.pub') }}"
+
+    - name: Create sudoers drop-in for derek
+      copy:
+        dest: /etc/sudoers.d/derek
+        content: "derek ALL=(ALL) NOPASSWD: ALL\n"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    - name: Set hostname
+      hostname:
+        name: "{{ target_hostname }}"
+
+    - name: Update /etc/hosts with new hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ target_hostname }}"
+        state: present
+
+    - name: Drop netplan config for ubuntu1
+      copy:
+        src: templates/netplan-ubuntu1.yaml
+        dest: /etc/netplan/00-installer-config.yaml
+        mode: '0600'
+      when: target_hostname == "ubuntu1-derek"
+
+    - name: Drop netplan config for ubuntu2
+      copy:
+        src: templates/netplan-ubuntu2.yaml
+        dest: /etc/netplan/00-installer-config.yaml
+        mode: '0600'
+      when: target_hostname == "ubuntu2-derek"
+
+    - name: Apply netplan
+      shell: netplan apply
+      async: 10
+      poll: 0
