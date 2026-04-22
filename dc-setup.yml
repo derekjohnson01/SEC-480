@@ -1,0 +1,96 @@
+---
+- name: Configure Domain Controller
+  hosts: servers
+  gather_facts: no
+
+  vars_prompt:
+    - name: admin_password
+      prompt: "Enter Local Administrator password"
+      private: yes
+
+    - name: dsrm_password
+      prompt: "Enter DSRM (Safe Mode) password"
+      private: yes
+
+  tasks:
+    # 1. Set Local Administrator Password
+    - name: Set Administrator password
+      win_user:
+        name: Administrator
+        password: "{{ admin_password }}"
+        state: present
+
+    # 2. Set Hostname
+    - name: Set hostname to dc-blue1
+      win_shell: |
+        if ($env:COMPUTERNAME -ne "dc-blue1") {
+            Rename-Computer -NewName "dc-blue1" -Force
+        }
+      register: hostname_result
+
+    - name: Reboot after hostname change
+      win_reboot:
+
+    # 3. Install AD DS and DNS
+    - name: Install AD DS and DNS features
+      win_feature:
+        name:
+          - AD-Domain-Services
+          - DNS
+        include_management_tools: yes
+        state: present
+
+    # 4. Create new forest
+    - name: Create Active Directory forest
+      microsoft.ad.domain:
+        dns_domain_name: blue1.local
+        safe_mode_password: "{{ dsrm_password }}"
+      register: domain_install
+
+    # 5. Reboot after forest creation and wait for DNS
+    - name: Reboot after domain creation
+      win_reboot:
+        reboot_timeout: 600
+        post_reboot_delay: 60
+        test_command: 'exit (Get-Service -Name DNS).Status -ne "Running"'
+      when: domain_install.reboot_required
+
+    # 6. Pause for AD services to stabilize
+    - name: Wait for AD services to fully start
+      pause:
+        seconds: 120
+
+    # 7. Add DNS Forwarder
+    - name: Add DNS Server Forwarder
+      win_shell: |
+        Add-DnsServerForwarder -IPAddress 10.0.5.2
+
+    # 8. Create Reverse Lookup Zone and DNS Records
+    - name: Create reverse lookup zone and DNS records
+      win_shell: |
+        # Reverse lookup zone
+        if (-not (Get-DnsServerZone -Name "5.0.10.in-addr.arpa" -ErrorAction SilentlyContinue)) {
+            Add-DnsServerPrimaryZone -NetworkID "10.0.5.0/24" -ReplicationScope "Forest"
+        }
+
+        # A records with auto PTR
+        Add-DnsServerResourceRecordA -Name "dc-blue1" -ZoneName "blue1.local" -IPv4Address "10.0.5.5" -CreatePtr -ErrorAction SilentlyContinue
+        Add-DnsServerResourceRecordA -Name "blue15-vyos" -ZoneName "blue1.local" -IPv4Address "10.0.5.2" -CreatePtr -ErrorAction SilentlyContinue
+
+    # 9. Create OU Structure
+    - name: Create OU structure
+      win_shell: |
+        $domain = (Get-ADDomain).DistinguishedName
+
+        New-ADOrganizationalUnit -Name "blue1" -Path $domain -ProtectedFromAccidentalDeletion $false
+
+        $blue1 = "OU=blue1,$domain"
+        New-ADOrganizationalUnit -Name "Accounts" -Path $blue1 -ProtectedFromAccidentalDeletion $false
+        New-ADOrganizationalUnit -Name "Computers" -Path $blue1 -ProtectedFromAccidentalDeletion $false
+
+        $accounts = "OU=Accounts,$blue1"
+        New-ADOrganizationalUnit -Name "Groups" -Path $accounts -ProtectedFromAccidentalDeletion $false
+
+        $computers = "OU=Computers,$blue1"
+        New-ADOrganizationalUnit -Name "Servers" -Path $computers -ProtectedFromAccidentalDeletion $false
+        New-ADOrganizationalUnit -Name "Workstations" -Path $computers -ProtectedFromAccidentalDeletion $false

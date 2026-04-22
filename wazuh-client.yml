@@ -1,0 +1,29 @@
+---
+# Wazuh Agent Deployment Playbook
+# Based on: https://documentation.wazuh.com/current/deployment-options/deploying-with-ansible/guide/index.html
+#
+# Prerequisites:
+#   - Clone wazuh-ansible repo: git clone --branch v4.14.3 https://github.com/wazuh/wazuh-ansible.git /etc/ansible/roles/wazuh-ansible
+#   - Define 'wazuh-agents' host group in your inventory file
+#   - Ensure SSH access from Ansible control node to agent endpoints
+#   - For Ansible-core 2.10+, install required collections:
+#       ansible-galaxy collection install ansible.windows community.windows
+#
+# Usage:
+#   ansible-playbook wazuh-agent.yml -b -i ./wazuh-agent-hosts
+
+- hosts: wazuh-agents
+  become: yes
+  become_user: root
+  roles:
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/ansible-wazuh-agent
+  vars:
+    wazuh_managers:
+      - address: 10.0.5.30
+        port: 1514
+        protocol: tcp
+        api_port: 55000
+        api_proto: 'https'
+        api_user: wazuh
+        max_retries: 5
+        retry_interval: 5

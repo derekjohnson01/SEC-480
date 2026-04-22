@@ -387,5 +387,60 @@ function Set-Network {
     }
 }
 
+function Set-IP {
+    [CmdletBinding()]
+    param()
+
+    try {
+        # 1. Show all VMs
+        $vms = Get-VM
+        if (-not $vms) {
+            Write-Host "No VMs found." -ForegroundColor Red
+            return
+        }
+
+        Write-Host "`n--- Available VMs ---" -ForegroundColor Cyan
+        foreach ($vm in $vms) {
+            Write-Host "  $($vm.Name) (Power: $($vm.PowerState))"
+        }
+
+        # 2. User types VM name
+        $vmName = Read-Host "`nEnter VM name"
+        $selectedVM = Get-VM -Name $vmName -ErrorAction Stop
+        Write-Host "Selected: $($selectedVM.Name)" -ForegroundColor Green
+
+        # 3. Get guest credentials first so we can query interfaces
+        $guestUser = Read-Host "`nEnter guest OS username"
+        $guestPass = Read-Host "Enter guest OS password" -AsSecureString
+        $guestCred = New-Object System.Management.Automation.PSCredential($guestUser, $guestPass)
+
+        # 4. Show guest OS interfaces
+        Write-Host "`n--- Guest OS Interfaces ---" -ForegroundColor Cyan
+        Invoke-VMScript -VM $selectedVM -ScriptText "Get-NetAdapter | Format-Table Name, InterfaceAlias, Status, MacAddress -AutoSize" -GuestCredential $guestCred -ScriptType Powershell
+
+        # 5. User types interface name
+        $guestInterface = Read-Host "`nEnter guest OS interface name (e.g. Ethernet0)"
+
+        # 6. User types new IP config
+        $newIP = Read-Host "Enter new IPv4 address (e.g. 10.0.5.100)"
+        $prefix = Read-Host "Enter subnet prefix length (e.g. 24)"
+        $gateway = Read-Host "Enter default gateway (e.g. 10.0.5.1)"
+
+        # 7. Apply via Invoke-VMScript
+        Write-Host "`nApplying IP configuration..." -ForegroundColor Cyan
+
+        $script = @"
+Remove-NetIPAddress -InterfaceAlias '$guestInterface' -Confirm:`$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceAlias '$guestInterface' -IPAddress $newIP -PrefixLength $prefix -DefaultGateway $gateway
+"@
+        Invoke-VMScript -VM $selectedVM -ScriptText $script -GuestCredential $guestCred -ScriptType Powershell
+
+        Write-Host "`nIP configuration applied: $newIP/$prefix gw $gateway on $guestInterface ($($selectedVM.Name))" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Error: $_" -ForegroundColor Red
+    }
+}
+
 # Export the functions
-Export-ModuleMember -Function New-VMFromSnapshot, Invoke-VMClone, New-Network, Get-Network, Set-Network, Start-VMInteractive, Stop-VMInteractive
+Export-ModuleMember -Function New-VMFromSnapshot, Invoke-VMClone, New-Network, Get-Network, Set-Network, Start-VMInteractive, Stop-VMInteractive, Set-IP

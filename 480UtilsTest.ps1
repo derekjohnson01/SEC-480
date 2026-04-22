@@ -9,12 +9,12 @@ Connect-VIServer -Server $vserver -Credential $creds
 Write-Host "Connected to $vserver successfully." -ForegroundColor Green
 
 # Step 1: Configure the clone
-Write-Host "`n--- Test: New-VMFromSnapshot ---"  -ForegroundColor Yellow
-New-VMFromSnapshot
+# Write-Host "`n--- Test: New-VMFromSnapshot ---"  -ForegroundColor Yellow
+# New-VMFromSnapshot
 
 # Step 2: Execute the clone
-Write-Host "`n--- Test: Invoke-VMClone ---" -ForegroundColor Yellow
-Invoke-VMClone
+# Write-Host "`n--- Test: Invoke-VMClone ---" -ForegroundColor Yellow
+# Invoke-VMClone
 
 <#
 # Step 3: Create a virtual switch and port group
@@ -23,9 +23,12 @@ New-Network
 
 #>
 
+# set ip
+# Set-IP
+
 # Step 4: Get network info on a VM
 # Write-Host "`n--- Test: Get-Network ---" -ForegroundColor Yellow
-# Get-Network
+Get-Network
 
 # Step 5: Assign a network adapter to a network
 # Write-Host "`n--- Test: Set-Network ---" -ForegroundColor Yellow

@@ -1,0 +1,70 @@
+---
+# Wazuh Single Node - Full Stack Deployment (Indexer + Manager + Filebeat + Dashboard)
+# Based on: https://documentation.wazuh.com/current/deployment-options/deploying-with-ansible/guide/index.html
+# Reference: wazuh-single.yml from wazuh-ansible repository
+#
+# This playbook deploys ALL Wazuh central components on a single host:
+#   - Wazuh Indexer
+#   - Wazuh Manager
+#   - Filebeat OSS
+#   - Wazuh Dashboard
+#
+# Prerequisites:
+#   - Clone wazuh-ansible repo: git clone --branch v4.14.3 https://github.com/wazuh/wazuh-ansible.git /etc/ansible/roles/wazuh-ansible
+#   - Define 'aio' host in /etc/ansible/hosts
+#   - Ensure SSH access from Ansible control node to target
+#
+# Usage:
+#   ansible-playbook wazuh-single.yml -b -K
+#
+# Default credentials after deployment:
+#   Username: admin
+#   Password: <place holder>
+
+# =============================================================================
+# Play 1: Certificate Generation
+# =============================================================================
+# Generates TLS certificates for all components without installing anything.
+
+- hosts: aio
+  roles:
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/wazuh-indexer
+      perform_installation: false
+  become: no
+  vars:
+    indexer_node_master: true
+    instances:
+      node1:
+        name: node-1       # Important: must be equal to indexer_node_name
+        ip: 127.0.0.1
+        role: indexer
+  tags:
+    - generate-certs
+
+# =============================================================================
+# Play 2: Install All Wazuh Central Components
+# =============================================================================
+# Installs the Wazuh indexer, manager, Filebeat, and dashboard on one node.
+
+- hosts: aio
+  become: yes
+  become_user: root
+  roles:
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/wazuh-indexer
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/ansible-wazuh-manager
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/ansible-filebeat-oss
+    - role: /etc/ansible/roles/wazuh-ansible/roles/wazuh/wazuh-dashboard
+  vars:
+    single_node: true
+    minimum_master_nodes: 1
+    indexer_node_master: true
+    indexer_network_host: 127.0.0.1
+    filebeat_node_name: node-1
+    filebeat_output_indexer_hosts:
+      - 127.0.0.1
+    instances:
+      node1:
+        name: node-1       # Important: must be equal to indexer_node_name
+        ip: 127.0.0.1
+        role: indexer
+    ansible_shell_allow_world_readable_temp: true

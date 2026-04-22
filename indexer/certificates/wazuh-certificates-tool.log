@@ -1,0 +1,6 @@
+06/04/2026 13:34:13 INFO: Verbose logging redirected to /home/derek/Desktop/SEC-480/indexer/certificates/wazuh-certificates-tool.log
+06/04/2026 13:34:13 INFO: Generating the root certificate.
+06/04/2026 13:34:13 INFO: Generating Admin certificates.
+06/04/2026 13:34:14 INFO: Admin certificates created.
+06/04/2026 13:34:14 INFO: Generating Wazuh indexer certificates.
+06/04/2026 13:34:14 INFO: Wazuh indexer certificates created.
